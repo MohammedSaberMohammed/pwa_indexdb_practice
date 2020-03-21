@@ -1,3 +1,6 @@
+importScripts('/src/js/idb.js');
+importScripts('/src/js/utility.js');
+
 var CACHE_STATIC_NAME = 'static-v15';
 var CACHE_DYNAMIC_NAME = 'dynamic-v2';
 var STATIC_FILES = [
@@ -6,6 +9,7 @@ var STATIC_FILES = [
   '/offline.html',
   '/src/js/app.js',
   '/src/js/feed.js',
+  '/src/js/idb.js',
   '/src/js/promise.js',
   '/src/js/fetch.js',
   '/src/js/material.min.js',
@@ -70,17 +74,25 @@ function isInArray(string, array) {
 
 self.addEventListener('fetch', function (event) {
 
-  var url = 'https://httpbin.org/get';
+  var url = 'https://indexeddb-pwa-practice.firebaseio.com/posts';
   if (event.request.url.indexOf(url) > -1) {
     event.respondWith(
-      caches.open(CACHE_DYNAMIC_NAME)
-        .then(function (cache) {
-          return fetch(event.request)
-            .then(function (res) {
-              // trimCache(CACHE_DYNAMIC_NAME, 3);
-              cache.put(event.request, res.clone());
-              return res;
-            });
+      fetch(event.request)
+        .then(function (res) {
+          // store the json response in IDB
+          let clonedRes = res.clone();
+
+          clearAllData('posts')
+            .then(() => {
+              return clonedRes.json()
+            })
+            .then(data => {
+                for(let key in data) {
+                  writeData('posts', data[key])
+                }
+            })
+
+          return res;
         })
     );
   } else if (isInArray(event.request.url, STATIC_FILES)) {
