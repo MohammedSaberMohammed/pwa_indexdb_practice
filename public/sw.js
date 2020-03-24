@@ -61,17 +61,6 @@ self.addEventListener('activate', function (event) {
   return self.clients.claim();
 });
 
-function isInArray(string, array) {
-  var cachePath;
-  if (string.indexOf(self.origin) === 0) { // request targets domain where we serve the page from (i.e. NOT a CDN)
-    console.log('matched ', string);
-    cachePath = string.substring(self.origin.length); // take the part of the URL AFTER the domain (e.g. after localhost:8080)
-  } else {
-    cachePath = string; // store the full request (for CDNs)
-  }
-  return array.indexOf(cachePath) > -1;
-}
-
 self.addEventListener('fetch', function (event) {
 
   var url = 'https://indexeddb-pwa-practice.firebaseio.com/posts';
@@ -95,7 +84,7 @@ self.addEventListener('fetch', function (event) {
           return res;
         })
     );
-  } else if (isInArray(event.request.url, STATIC_FILES)) {
+  } else if (STATIC_FILES.indexOf(event.request.url) > -1) {
     event.respondWith(
       caches.match(event.request)
     );
@@ -129,58 +118,42 @@ self.addEventListener('fetch', function (event) {
   }
 });
 
-// self.addEventListener('fetch', function(event) {
-//   event.respondWith(
-//     caches.match(event.request)
-//       .then(function(response) {
-//         if (response) {
-//           return response;
-//         } else {
-//           return fetch(event.request)
-//             .then(function(res) {
-//               return caches.open(CACHE_DYNAMIC_NAME)
-//                 .then(function(cache) {
-//                   cache.put(event.request.url, res.clone());
-//                   return res;
-//                 })
-//             })
-//             .catch(function(err) {
-//               return caches.open(CACHE_STATIC_NAME)
-//                 .then(function(cache) {
-//                   return cache.match('/offline.html');
-//                 });
-//             });
-//         }
-//       })
-//   );
-// });
+self.addEventListener('sync', e => {
+  console.log('[Service Worker] Background syncing', e);
 
-// self.addEventListener('fetch', function(event) {
-//   event.respondWith(
-//     fetch(event.request)
-//       .then(function(res) {
-//         return caches.open(CACHE_DYNAMIC_NAME)
-//                 .then(function(cache) {
-//                   cache.put(event.request.url, res.clone());
-//                   return res;
-//                 })
-//       })
-//       .catch(function(err) {
-//         return caches.match(event.request);
-//       })
-//   );
-// });
+  if(e.tag === 'sync-new-post') {
+    console.log('[Service Worker] Syncing New Post');
 
-// Cache-only
-// self.addEventListener('fetch', function (event) {
-//   event.respondWith(
-//     caches.match(event.request)
-//   );
-// });
+    e.waitUntil(
+      readAllData('sync-posts')
+        .then(data => {
+          for(let item of data) {
+            fetch('https://indexeddb-pwa-practice.firebaseio.com/posts.json', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                id: item.id,
+                title: item.title,
+                location: item.location,
+                image: 'https://firebasestorage.googleapis.com/v0/b/indexeddb-pwa-practice.appspot.com/o/valley2.jpg?alt=media&token=c029d821-ca3d-4834-9dfc-bfa4366b6e47'
+              })
+            })
+            .then(res => {
+              console.log('Sent Data', res);
 
-// Network-only
-// self.addEventListener('fetch', function (event) {
-//   event.respondWith(
-//     fetch(event.request)
-//   );
-// });
+              if(res.ok) {
+                // delete item after sending it successfully
+                deleteItemFromData('sync-posts', item.id)
+              }
+            })
+            .catch(err => {
+              console.log('Error while reading data', err);
+            });
+          }
+        })
+    );
+  }
+})

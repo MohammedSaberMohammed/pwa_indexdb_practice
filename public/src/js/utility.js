@@ -1,5 +1,6 @@
 let dbPromise = idb.open('posts-store', 1, db => {
     db.createObjectStore('posts', { keyPath: 'id' })
+    db.createObjectStore('sync-posts', { keyPath: 'id' })
 });
 
 function writeData(st, data) {
@@ -13,7 +14,7 @@ function writeData(st, data) {
     })
 }
 
-function readData(st) {
+function readAllData(st) {
     return dbPromise.then(db => {
         let tx = db.transaction(st, 'readonly');
         let store = tx.objectStore(st);

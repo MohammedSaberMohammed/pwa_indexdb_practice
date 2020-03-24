@@ -2,6 +2,9 @@ var shareImageButton = document.querySelector('#share-image-button');
 var createPostArea = document.querySelector('#create-post');
 var closeCreatePostModalButton = document.querySelector('#close-create-post-modal-btn');
 var sharedMomentsArea = document.querySelector('#shared-moments');
+var form = document.querySelector('form');
+var titleInput = document.querySelector('#title');
+var locationInput = document.querySelector('#location');
 
 function openCreatePostModal() {
   createPostArea.style.display = 'block';
@@ -113,7 +116,7 @@ fetch(url)
 
 if ('indexedDB' in window) {
 
-  readData('posts').then(data => {
+  readAllData('posts').then(data => {
     if(!networkDataReceived) {
       console.log('FromCache', data);
 
@@ -121,3 +124,64 @@ if ('indexedDB' in window) {
     }
   })
 }
+
+function sendData() {
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      id: new Date().toISOString(),
+      title: titleInput.value,
+      location: locationInput.value,
+      image: 'https://firebasestorage.googleapis.com/v0/b/indexeddb-pwa-practice.appspot.com/o/valley2.jpg?alt=media&token=c029d821-ca3d-4834-9dfc-bfa4366b6e47'
+    })
+  })
+  .then(res => {
+    console.log('Sent Data', res);
+    updateUI(res.json())
+  });
+}
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+
+  if(titleInput.value.trim() === '' || locationInput.value.trim() === '') {
+    alert('please enter valid Data');
+    return;
+  }
+
+  // 1/ close the modal
+  closeCreatePostModal();
+  // Register Async Task
+  if('serviceWorker' in navigator && 'SyncManager' in window) {
+    navigator.serviceWorker.ready
+      .then(sw => {
+        // data to be syncronized
+        let post = {
+          id: new Date().toISOString(),
+          title: titleInput.value,
+          location: locationInput.value,
+        };
+        // save our data in indexedDB
+        writeData('sync-posts', post)
+          .then(() => {
+            // register a sync task
+            return sw.sync.register('sync-new-post')
+          })
+          .then(synced => {
+            let snackBarContainer = document.querySelector('#confirmation-toast');
+            let data = { message: 'Your Post was Saved For Syncing!' };
+
+            snackBarContainer.MaterialSnackbar.showSnackbar(data);
+          })
+          .catch(err => {
+            console.log('err', err);
+          });
+      })
+  } else {
+     sendData();
+  }
+})
